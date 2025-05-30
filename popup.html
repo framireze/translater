@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcriptor de Videollamadas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 350px;
+            min-height: 500px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .content {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.98);
+            margin: 10px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #4285f4;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.active {
+            background: #28a745;
+        }
+
+        .controls-section {
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn-primary {
+            background: #4285f4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3367d6;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .language-config {
+            margin-bottom: 20px;
+        }
+
+        .language-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .language-row label {
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 60px;
+        }
+
+        .language-row select {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            background: white;
+        }
+
+        .language-row select:focus {
+            outline: none;
+            border-color: #4285f4;
+            box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+        }
+
+        .arrow {
+            font-size: 16px;
+            color: #666;
+        }
+
+        .settings-section {
+            margin-bottom: 20px;
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            font-size: 12px;
+            color: #333;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 20px;
+            background: #ccc;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #4285f4;
+        }
+
+        .toggle-switch::before {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch.active::before {
+            transform: translateX(20px);
+        }
+
+        .stats-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .stat-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #4285f4;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .footer a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .toast {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 12px;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            background: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎤 Transcriptor de Videollamadas</h1>
+        <p>Transcripción y traducción en tiempo real</p>
+    </div>
+
+    <div class="content">
+        <!-- Estado actual -->
+        <div class="status-section">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Inactivo</span>
+            </div>
+            <div id="currentPlatform" style="font-size: 11px; color: #666;">
+                Plataforma: No detectada
+            </div>
+        </div>
+
+        <!-- Controles principales -->
+        <div class="controls-section">
+            <div class="section-title">Controles</div>
+            <div class="button-group">
+                <button class="btn btn-primary" id="startBtn">
+                    ▶️ Iniciar
+                </button>
+                <button class="btn btn-secondary" id="pauseBtn" disabled>
+                    ⏸️ Pausar
+                </button>
+            </div>
+            <div class="button-group">
+                <button class="btn btn-secondary" id="clearBtn">
+                    🗑️ Limpiar
+                </button>
+                <button class="btn btn-secondary" id="saveBtn">
+                    💾 Guardar
+                </button>
+            </div>
+        </div>
+
+        <!-- Configuración de idiomas -->
+        <div class="language-config">
+            <div class="section-title">Idiomas</div>
+            <div class="language-row">
+                <label>Origen:</label>
+                <select id="sourceLanguage">
+                    <option value="es-ES">Español</option>
+                    <option value="en-US">English</option>
+                    <option value="fr-FR">Français</option>
+                    <option value="de-DE">Deutsch</option>
+                    <option value="it-IT">Italiano</option>
+                    <option value="pt-BR">Português</option>
+                </select>
+            </div>
+            <div class="language-row">
+                <span class="arrow">↓</span>
+                <label>Destino:</label>
+                <select id="targetLanguage">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                    <option value="it">Italiano</option>
+                    <option value="pt">Português</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Configuración -->
+        <div class="settings-section">
+            <div class="section-title">Configuración</div>
+            <div class="setting-item">
+                <span class="setting-label">Traducción automática</span>
+                <div class="toggle-switch active" data-setting="autoTranslate"></div>
+            </div>
+            <div class="setting-item">
+                <span class="setting-label">Guardar transcripciones</span>
+                <div class="toggle-switch active" data-setting="saveTranscriptions"></div>
+            </div>
+            <div class="setting-item">
+                <span class="setting-label">Ocultar al compartir pantalla</span>
+                <div class="toggle-switch active" data-setting="hideOnScreenShare"></div>
+            </div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="stats-section">
+            <div class="section-title">Estadísticas de la sesión</div>
+            <div class="stat-item">
+                <span>Tiempo activo:</span>
+                <span class="stat-value" id="activeTime">00:00</span>
+            </div>
+            <div class="stat-item">
+                <span>Palabras transcritas:</span>
+                <span class="stat-value" id="wordCount">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Transcripciones guardadas:</span>
+                <span class="stat-value" id="savedCount">0</span>
+            </div>
+        </div>
+
+        <!-- Botones de gestión -->
+        <div class="button-group">
+            <button class="btn btn-secondary" id="historyBtn">
+                📋 Historial
+            </button>
+            <button class="btn btn-secondary" id="exportBtn">
+                📤 Exportar
+            </button>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Creado para mejorar la accesibilidad en videollamadas</p>
+        <a href="#" id="helpLink">Ayuda y soporte</a>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        class PopupController {
+            constructor() {
+                this.isActive = false;
+                this.startTime = null;
+                this.activeTimeInterval = null;
+                this.wordCount = 0;
+                this.currentTab = null;
+                
+                this.init();
+            }
+
+            async init() {
+                await this.getCurrentTab();
+                await this.loadSettings();
+                await this.loadStats();
+                this.setupEventListeners();
+                this.updateUI();
+                this.startActiveTimeCounter();
+            }
+
+            async getCurrentTab() {
+                const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                this.currentTab = tabs[0];
+                
+                // Detectar plataforma
+                const platform = this.detectPlatform(this.currentTab.url);
+                document.getElementById('currentPlatform').textContent = `Plataforma: ${platform}`;
+            }
+
+            detectPlatform(url) {
+                if (url.includes('teams.microsoft.com')) return 'Microsoft Teams';
+                if (url.includes('meet.google.com')) return 'Google Meet';
+                return 'No detectada';
+            }
+
+            setupEventListeners() {
+                // Botones de control
+                document.getElementById('startBtn').addEventListener('click', () => this.startTranscription());
+                document.getElementById('pauseBtn').addEventListener('click', () => this.pauseTranscription());
+                document.getElementById('clearBtn').addEventListener('click', () => this.clearTranscription());
+                document.getElementById('saveBtn').addEventListener('click', () => this.saveTranscription());
+
+                // Selectores de idioma
+                document.getElementById('sourceLanguage').addEventListener('change', (e) => {
+                    this.updateSetting('sourceLanguage', e.target.value);
+                });
+                document.getElementById('targetLanguage').addEventListener('change', (e) => {
+                    this.updateSetting('targetLanguage', e.target.value);
+                });
+
+                // Toggles de configuración
+                document.querySelectorAll('.toggle-switch').forEach(toggle => {
+                    toggle.addEventListener('click', () => {
+                        const setting = toggle.dataset.setting;
+                        const isActive = toggle.classList.contains('active');
+                        
+                        if (isActive) {
+                            toggle.classList.remove('active');
+                        } else {
+                            toggle.classList.add('active');
+                        }
+                        
+                        this.updateSetting(setting, !isActive);
+                    });
+                });
+
+                // Otros botones
+                document.getElementById('historyBtn').addEventListener('click', () => this.showHistory());
+                document.getElementById('exportBtn').addEventListener('click', () => this.exportData());
+                document.getElementById('helpLink').addEventListener('click', () => this.showHelp());
+            }
+
+            async startTranscription() {
+                try {
+                    await chrome.tabs.sendMessage(this.currentTab.id, { action: 'startTranscription' });
+                    this.isActive = true;
+                    this.startTime = Date.now();
+                    this.updateUI();
+                    this.showToast('Transcripción iniciada', 'success');
+                } catch (error) {
+                    console.error('Error al iniciar transcripción:', error);
+                    this.showToast('Error al iniciar transcripción', 'error');
+                }
+            }
+
+            async pauseTranscription() {
+                try {
+                    await chrome.tabs.sendMessage(this.currentTab.id, { action: 'stopTranscription' });
+                    this.isActive = false;
+                    this.updateUI();
+                    this.showToast('Transcripción pausada', 'success');
+                } catch (error) {
+                    console.error('Error al pausar transcripción:', error);
+                    this.showToast('Error al pausar transcripción', 'error');
+                }
+            }
+
+            async clearTranscription() {
+                try {
+                    await chrome.tabs.sendMessage(this.currentTab.id, { action: 'clearTranscription' });
+                    this.wordCount = 0;
+                    this.updateStats();
+                    this.showToast('Transcripción limpiada', 'success');
+                } catch (error) {
+                    console.error('Error al limpiar transcripción:', error);
+                }
+            }
+
+            async saveTranscription() {
+                try {
+                    const response = await chrome.tabs.sendMessage(this.currentTab.id, { action: 'getTranscriptionData' });
+                    
+                    if (response && response.data) {
+                        await chrome.runtime.sendMessage({
+                            action: 'saveTranscription',
+                            data: {
+                                content: response.data,
+                                language: document.getElementById('sourceLanguage').value,
+                                platform: this.detectPlatform(this.currentTab.url)
+                            }
+                        });
+                        
+                        await this.loadStats();
+                        this.showToast('Transcripción guardada', 'success');
+                    }
+                } catch (error) {
+                    console.error('Error al guardar transcripción:', error);
+                    this.showToast('Error al guardar transcripción', 'error');
+                }
+            }
+
+            async loadSettings() {
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+                    const settings = response.settings || {};
+
+                    // Actualizar selectores de idioma
+                    if (settings.sourceLanguage) {
+                        document.getElementById('sourceLanguage').value = settings.sourceLanguage;
+                    }
+                    if (settings.targetLanguage) {
+                        document.getElementById('targetLanguage').value = settings.targetLanguage;
+                    }
+
+                    // Actualizar toggles
+                    const toggles = document.querySelectorAll('.toggle-switch');
+                    toggles.forEach(toggle => {
+                        const setting = toggle.dataset.setting;
+                        if (settings[setting] !== undefined) {
+                            if (settings[setting]) {
+                                toggle.classList.add('active');
+                            } else {
+                                toggle.classList.remove('active');
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error al cargar configuración:', error);
+                }
+            }
+
+            async updateSetting(key, value) {
+                try {
+                    const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+                    const settings = response.settings || {};
+                    settings[key] = value;
+                    
+                    await chrome.runtime.sendMessage({
+                        action: 'updateSettings',
+                        settings: settings
+                    });
+                } catch (error) {
+                    console.error('Error al actualizar configuración:', error);
+                }
+            }
+
+            async loadStats() {
+                try {
+                    const result = await chrome.storage.local.get(['savedTranscriptions']);
+                    const savedTranscriptions = result.savedTranscriptions || [];
+                    document.getElementById('savedCount').textContent = savedTranscriptions.length;
+                } catch (error) {
+                    console.error('Error al cargar estadísticas:', error);
+                }
+            }
+
+            updateStats() {
+                document.getElementById('wordCount').textContent = this.wordCount;
+            }
+
+            updateUI() {
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                const startBtn = document.getElementById('startBtn');
+                const pauseBtn = document.getElementById('pauseBtn');
+
+                if (this.isActive) {
+                    statusDot.classList.add('active');
+                    statusText.textContent = 'Transcribiendo...';
+                    startBtn.disabled = true;
+                    pauseBtn.disabled = false;
+                } else {
+                    statusDot.classList.remove('active');
+                    statusText.textContent = 'Inactivo';
+                    startBtn.disabled = false;
+                    pauseBtn.disabled = true;
+                }
+            }
+
+            startActiveTimeCounter() {
+                this.activeTimeInterval = setInterval(() => {
+                    if (this.isActive && this.startTime) {
+                        const elapsed = Date.now() - this.startTime;
+                        const minutes = Math.floor(elapsed / 60000);
+                        const seconds = Math.floor((elapsed % 60000) / 1000);
+                        document.getElementById('activeTime').textContent = 
+                            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }, 1000);
+            }
+
+            showHistory() {
+                // Implementar ventana de historial
+                this.showToast('Función de historial próximamente', 'info');
+            }
+
+            async exportData() {
+                try {
+                    const result = await chrome.storage.local.get(['savedTranscriptions']);
+                    const savedTranscriptions = result.savedTranscriptions || [];
+                    
+                    if (savedTranscriptions.length === 0) {
+                        this.showToast('No hay transcripciones para exportar', 'error');
+                        return;
+                    }
+
+                    const dataStr = JSON.stringify(savedTranscriptions, null, 2);
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(dataBlob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `transcripciones_${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    
+                    this.showToast('Datos exportados exitosamente', 'success');
+                } catch (error) {
+                    console.error('Error al exportar datos:', error);
+                    this.showToast('Error al exportar datos', 'error');
+                }
+            }
+
+            showHelp() {
+                chrome.tabs.create({
+                    url: 'https://github.com/tu-repo/extension-help'
+                });
+            }
+
+            showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = `toast ${type}`;
+                toast.classList.add('show');
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Inicializar cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', () => {
+            new PopupController();
+        });
+    </script>
+</body>
+</html>
