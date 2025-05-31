@@ -1,5 +1,5 @@
-// Service Worker para la extensión de Chrome
-class TranscriptionExtensionBackground {
+// Service Worker para la extensión de Chrome - Chat Translation
+class ChatTranslationBackground {
     constructor() {
         this.setupEventListeners();
     }
@@ -8,7 +8,7 @@ class TranscriptionExtensionBackground {
         // Cuando se instala la extensión
         chrome.runtime.onInstalled.addListener((details) => {
             if (details.reason === 'install') {
-                console.log('Extensión de transcripción instalada');
+                console.log('Extensión de traducción de chat instalada');
                 this.setDefaultSettings();
             }
         });
@@ -22,7 +22,7 @@ class TranscriptionExtensionBackground {
         // Manejar cambios en las pestañas
         chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             if (changeInfo.status === 'complete' && this.isVideoCallSite(tab.url)) {
-                this.injectTranscriptionScript(tabId);
+                this.injectChatScript(tabId);
             }
         });
 
@@ -42,7 +42,7 @@ class TranscriptionExtensionBackground {
             url.includes('meet.google.com');
     }
 
-    async injectTranscriptionScript(tabId) {
+    async injectChatScript(tabId) {
         try {
             // Verificar si el content script ya está inyectado
             const results = await chrome.scripting.executeScript({
@@ -64,7 +64,7 @@ class TranscriptionExtensionBackground {
                     files: ['content.css']
                 });
 
-                console.log('Script de transcripción inyectado en pestaña:', tabId);
+                console.log('Script de traducción de chat inyectado en pestaña:', tabId);
             }
         } catch (error) {
             console.error('Error al inyectar script:', error);
@@ -73,18 +73,18 @@ class TranscriptionExtensionBackground {
 
     async handleMessage(request, sender, sendResponse) {
         switch (request.action) {
-            case 'startTranscription':
-                await this.startTranscription(sender.tab.id);
+            case 'startChatTranslation':
+                await this.startChatTranslation(sender.tab.id);
                 sendResponse({ success: true });
                 break;
 
-            case 'stopTranscription':
-                await this.stopTranscription(sender.tab.id);
+            case 'stopChatTranslation':
+                await this.stopChatTranslation(sender.tab.id);
                 sendResponse({ success: true });
                 break;
 
-            case 'saveTranscription':
-                await this.saveTranscription(request.data);
+            case 'saveChatLog':
+                await this.saveChatLog(request.data);
                 sendResponse({ success: true });
                 break;
 
@@ -103,69 +103,84 @@ class TranscriptionExtensionBackground {
                 sendResponse({ translation });
                 break;
 
+            case 'getChatHistory':
+                const history = await this.getChatHistory();
+                sendResponse({ history });
+                break;
+
+            case 'clearChatHistory':
+                await this.clearChatHistory();
+                sendResponse({ success: true });
+                break;
+
             default:
                 sendResponse({ error: 'Acción no reconocida' });
         }
     }
 
-    async startTranscription(tabId) {
+    async startChatTranslation(tabId) {
         try {
-            await chrome.tabs.sendMessage(tabId, { action: 'startTranscription' });
-            this.updateBadge(tabId, 'REC');
-            console.log('Transcripción iniciada en pestaña:', tabId);
+            await chrome.tabs.sendMessage(tabId, { action: 'startChatTranslation' });
+            this.updateBadge(tabId, '🌐');
+            console.log('Traducción de chat iniciada en pestaña:', tabId);
         } catch (error) {
-            console.error('Error al iniciar transcripción:', error);
+            console.error('Error al iniciar traducción de chat:', error);
         }
     }
 
-    async stopTranscription(tabId) {
+    async stopChatTranslation(tabId) {
         try {
-            await chrome.tabs.sendMessage(tabId, { action: 'stopTranscription' });
+            await chrome.tabs.sendMessage(tabId, { action: 'stopChatTranslation' });
             this.updateBadge(tabId, '');
-            console.log('Transcripción detenida en pestaña:', tabId);
+            console.log('Traducción de chat detenida en pestaña:', tabId);
         } catch (error) {
-            console.error('Error al detener transcripción:', error);
+            console.error('Error al detener traducción de chat:', error);
         }
     }
 
-    async saveTranscription(data) {
+    async saveChatLog(data) {
         try {
             const timestamp = new Date().toISOString();
-            const transcriptionData = {
+            const chatLogData = {
                 timestamp,
-                content: data.content,
-                language: data.language,
-                platform: data.platform
+                messages: data.messages,
+                sourceLanguage: data.sourceLanguage,
+                targetLanguage: data.targetLanguage,
+                platform: data.platform,
+                sessionDuration: data.sessionDuration
             };
 
-            // Obtener transcripciones guardadas
-            const result = await chrome.storage.local.get(['savedTranscriptions']);
-            const savedTranscriptions = result.savedTranscriptions || [];
+            // Obtener logs guardados
+            const result = await chrome.storage.local.get(['savedChatLogs']);
+            const savedChatLogs = result.savedChatLogs || [];
 
-            // Agregar nueva transcripción
-            savedTranscriptions.push(transcriptionData);
+            // Agregar nuevo log
+            savedChatLogs.push(chatLogData);
 
-            // Limitar a las últimas 50 transcripciones
-            if (savedTranscriptions.length > 50) {
-                savedTranscriptions.splice(0, savedTranscriptions.length - 50);
+            // Limitar a los últimos 100 logs
+            if (savedChatLogs.length > 100) {
+                savedChatLogs.splice(0, savedChatLogs.length - 100);
             }
 
-            await chrome.storage.local.set({ savedTranscriptions });
-            console.log('Transcripción guardada');
+            await chrome.storage.local.set({ savedChatLogs });
+            console.log('Log de chat guardado');
         } catch (error) {
-            console.error('Error al guardar transcripción:', error);
+            console.error('Error al guardar log de chat:', error);
         }
     }
 
     async getSettings() {
         try {
-            const result = await chrome.storage.local.get(['transcriptionSettings']);
-            return result.transcriptionSettings || {
-                sourceLanguage: 'es-ES',
-                targetLanguage: 'en',
+            const result = await chrome.storage.local.get(['chatTranslationSettings']);
+            return result.chatTranslationSettings || {
+                sourceLanguage: 'en',
+                targetLanguage: 'es',
                 autoTranslate: true,
-                saveTranscriptions: true,
-                hideOnScreenShare: true
+                saveChatLogs: true,
+                hideOnScreenShare: true,
+                translationProvider: 'mymemory',
+                showTimestamps: true,
+                compactMode: false
             };
         } catch (error) {
             console.error('Error al obtener configuración:', error);
@@ -175,7 +190,7 @@ class TranscriptionExtensionBackground {
 
     async updateSettings(settings) {
         try {
-            await chrome.storage.local.set({ transcriptionSettings: settings });
+            await chrome.storage.local.set({ chatTranslationSettings: settings });
             console.log('Configuración actualizada');
         } catch (error) {
             console.error('Error al actualizar configuración:', error);
@@ -184,15 +199,18 @@ class TranscriptionExtensionBackground {
 
     async setDefaultSettings() {
         const defaultSettings = {
-            sourceLanguage: 'es-ES',
-            targetLanguage: 'en',
+            sourceLanguage: 'en',
+            targetLanguage: 'es',
             autoTranslate: true,
-            saveTranscriptions: true,
-            hideOnScreenShare: true
+            saveChatLogs: true,
+            hideOnScreenShare: true,
+            translationProvider: 'mymemory',
+            showTimestamps: true,
+            compactMode: false
         };
 
         try {
-            await chrome.storage.local.set({ transcriptionSettings: defaultSettings });
+            await chrome.storage.local.set({ chatTranslationSettings: defaultSettings });
             console.log('Configuración por defecto establecida');
         } catch (error) {
             console.error('Error al establecer configuración por defecto:', error);
@@ -200,26 +218,99 @@ class TranscriptionExtensionBackground {
     }
 
     async translateText(text, fromLang, toLang) {
-        const API_KEY = 'TU_CLAVE_API_AQUI';
         try {
-            const response = await fetch(
-                `https://translation.googleapis.com/language/translate/v2?key=${API_KEY}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        q: text,
-                        source: fromLang,
-                        target: toLang
-                    })
-                }
-            );
+            // Intentar con múltiples servicios de traducción
+            const translationServices = [
+                () => this.translateWithMyMemory(text, fromLang, toLang),
+                () => this.translateWithLibreTranslate(text, fromLang, toLang),
+                () => this.translateWithMicrosoft(text, fromLang, toLang)
+            ];
 
-            const data = await response.json();
-            return data.data.translations[0].translatedText;
+            for (const service of translationServices) {
+                try {
+                    const result = await service();
+                    if (result && result !== text) {
+                        return result;
+                    }
+                } catch (serviceError) {
+                    console.warn('Servicio de traducción falló:', serviceError);
+                    continue;
+                }
+            }
+
+            return `[Traducción no disponible] ${text}`;
         } catch (error) {
             console.error('Error en traducción:', error);
             return `[Error de traducción] ${text}`;
+        }
+    }
+
+    async translateWithMyMemory(text, fromLang, toLang) {
+        const response = await fetch(
+            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`,
+            {
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Chrome Extension Chat Translator'
+                }
+            }
+        );
+
+        const data = await response.json();
+        
+        if (data.responseData && data.responseData.translatedText) {
+            return data.responseData.translatedText;
+        }
+        
+        throw new Error('MyMemory translation failed');
+    }
+
+    async translateWithLibreTranslate(text, fromLang, toLang) {
+        // LibreTranslate API (requiere configuración del servidor)
+        const response = await fetch('https://libretranslate.de/translate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                q: text,
+                source: fromLang,
+                target: toLang,
+                format: 'text'
+            })
+        });
+
+        const data = await response.json();
+        
+        if (data.translatedText) {
+            return data.translatedText;
+        }
+        
+        throw new Error('LibreTranslate translation failed');
+    }
+
+    async translateWithMicrosoft(text, fromLang, toLang) {
+        // Microsoft Translator (requiere API key)
+        // Por ahora retornamos null para usar otros servicios
+        throw new Error('Microsoft Translator not configured');
+    }
+
+    async getChatHistory() {
+        try {
+            const result = await chrome.storage.local.get(['savedChatLogs']);
+            return result.savedChatLogs || [];
+        } catch (error) {
+            console.error('Error al obtener historial de chat:', error);
+            return [];
+        }
+    }
+
+    async clearChatHistory() {
+        try {
+            await chrome.storage.local.set({ savedChatLogs: [] });
+            console.log('Historial de chat limpiado');
+        } catch (error) {
+            console.error('Error al limpiar historial de chat:', error);
         }
     }
 
@@ -231,17 +322,47 @@ class TranscriptionExtensionBackground {
             });
 
             chrome.action.setBadgeBackgroundColor({
-                color: text === 'REC' ? '#ff0000' : '#4285f4',
+                color: text === '🌐' ? '#34a853' : '#4285f4',
                 tabId: tabId
             });
         } catch (error) {
             console.error('Error al actualizar badge:', error);
         }
     }
+
+    // Funciones para estadísticas y métricas
+    async updateStats(action, data = {}) {
+        try {
+            const result = await chrome.storage.local.get(['extensionStats']);
+            const stats = result.extensionStats || {
+                messagesTranslated: 0,
+                sessionsStarted: 0,
+                totalTimeActive: 0,
+                lastUsed: null
+            };
+
+            switch (action) {
+                case 'messageTranslated':
+                    stats.messagesTranslated++;
+                    break;
+                case 'sessionStarted':
+                    stats.sessionsStarted++;
+                    stats.lastUsed = new Date().toISOString();
+                    break;
+                case 'timeActive':
+                    stats.totalTimeActive += data.duration || 0;
+                    break;
+            }
+
+            await chrome.storage.local.set({ extensionStats: stats });
+        } catch (error) {
+            console.error('Error al actualizar estadísticas:', error);
+        }
+    }
 }
 
 // Inicializar el service worker
-const backgroundService = new TranscriptionExtensionBackground();
+const backgroundService = new ChatTranslationBackground();
 
 // Mantener el service worker activo
 chrome.runtime.onConnect.addListener((port) => {
@@ -251,9 +372,19 @@ chrome.runtime.onConnect.addListener((port) => {
 // Función para mantener el service worker vivo
 function keepAlive() {
     chrome.runtime.getPlatformInfo(() => {
-        // Simplemente una operación para mantener el service worker activo
+        // Operación simple para mantener el service worker activo
     });
 }
 
-// Ejecutar cada 20 segundos para mantener el service worker activo
-setInterval(keepAlive, 20000);
+// Ejecutar cada 25 segundos para mantener el service worker activo
+setInterval(keepAlive, 25000);
+
+// Manejar instalación y configuración inicial
+chrome.runtime.onStartup.addListener(() => {
+    console.log('Extension startup - Chat Translation');
+});
+
+// Limpiar recursos cuando se suspende
+chrome.runtime.onSuspend.addListener(() => {
+    console.log('Extension suspending - Chat Translation');
+});
