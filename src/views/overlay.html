@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Assistant - Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: rgba(10, 10, 10, 0.95);
+            color: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            -webkit-app-region: no-drag;
+        }
+
+        .overlay-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Header draggable */
+        .overlay-header {
+            background: rgba(26, 26, 26, 0.95);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            -webkit-app-region: drag;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .overlay-title {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #e0e0e0;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+            -webkit-app-region: no-drag;
+        }
+
+        .control-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: rgba(20, 20, 20, 0.95);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+            color: #888;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #e0e0e0;
+        }
+
+        .tab.active {
+            color: #6366f1;
+            border-bottom-color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        /* Transcription View */
+        .transcript-mini {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .transcript-line {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .transcript-line.es {
+            border-left-color: #6366f1;
+        }
+
+        .transcript-line.en {
+            border-left-color: #8b5cf6;
+        }
+
+        .transcript-line.current {
+            background: rgba(99, 102, 241, 0.2);
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .translation-mini {
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: rgba(99, 102, 241, 0.15);
+            border-radius: 6px;
+            font-size: 13px;
+            font-style: italic;
+            color: #a0a0ff;
+        }
+
+        /* AI Suggestions View */
+        .ai-suggestions {
+            display: none;
+        }
+
+        .suggestion-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .suggestion-card:hover {
+            background: rgba(99, 102, 241, 0.1);
+            transform: translateX(5px);
+        }
+
+        .suggestion-type {
+            font-size: 11px;
+            color: #6366f1;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .suggestion-text {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: none;
+            gap: 10px;
+            flex-direction: column;
+        }
+
+        .action-btn {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 8px;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .action-btn:hover {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .action-icon {
+            font-size: 18px;
+        }
+
+        /* Mini AI Chat */
+        .mini-ai-input {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px;
+            background: rgba(26, 26, 26, 0.95);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: none;
+        }
+
+        .mini-input-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mini-input {
+            flex: 1;
+            padding: 8px 12px;
+            background: rgba(10, 10, 10, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .mini-input:focus {
+            border-color: #6366f1;
+        }
+
+        .mini-send {
+            padding: 8px 12px;
+            background: #6366f1;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        /* Resize Handle */
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            -webkit-app-region: no-drag;
+        }
+
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            bottom: 3px;
+            right: 3px;
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid rgba(255, 255, 255, 0.3);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Responsive */
+        @media (max-height: 400px) {
+            .overlay-header {
+                padding: 8px 12px;
+            }
+            .tabs {
+                display: none;
+            }
+            .content {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay-container">
+        <div class="overlay-header">
+            <div class="overlay-title">
+                <span class="status-indicator"></span>
+                <span>Interview Assistant</span>
+            </div>
+            <div class="window-controls">
+                <button class="control-btn" id="minimizeBtn">−</button>
+                <button class="control-btn" id="pinBtn">📌</button>
+                <button class="control-btn" id="closeBtn">×</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="transcript">Transcripción</div>
+            <div class="tab" data-tab="suggestions">Sugerencias</div>
+            <div class="tab" data-tab="actions">Acciones</div>
+        </div>
+
+        <div class="content">
+            <!-- Transcription View -->
+            <div id="transcriptView" class="transcript-mini">
+                <div style="text-align: center; color: #666; padding: 20px;">
+                    <p>Esperando transcripción...</p>
+                </div>
+            </div>
+
+            <!-- AI Suggestions View -->
+            <div id="suggestionsView" class="ai-suggestions">
+                <div class="suggestion-card">
+                    <div class="suggestion-type">Respuesta Sugerida</div>
+                    <div class="suggestion-text">Las sugerencias aparecerán aquí basadas en la conversación</div>
+                </div>
+            </div>
+
+            <!-- Quick Actions View -->
+            <div id="actionsView" class="quick-actions">
+                <button class="action-btn" data-action="translate">
+                    <span class="action-icon">🌐</span>
+                    <span>Traducir último mensaje</span>
+                </button>
+                <button class="action-btn" data-action="summarize">
+                    <span class="action-icon">📝</span>
+                    <span>Resumir conversación</span>
+                </button>
+                <button class="action-btn" data-action="suggest">
+                    <span class="action-icon">💡</span>
+                    <span>Sugerir pregunta</span>
+                </button>
+                <button class="action-btn" data-action="explain">
+                    <span class="action-icon">🎓</span>
+                    <span>Explicar término técnico</span>
+                </button>
+                <button class="action-btn" data-action="ai-chat">
+                    <span class="action-icon">🤖</span>
+                    <span>Abrir chat AI</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mini AI Input -->
+        <div class="mini-ai-input" id="miniAiInput">
+            <div class="mini-input-wrapper">
+                <input type="text" class="mini-input" placeholder="Pregunta rápida..." id="quickInput">
+                <button class="mini-send" id="quickSend">Enviar</button>
+            </div>
+        </div>
+
+        <!-- Resize Handle -->
+        <div class="resize-handle"></div>
+    </div>
+
+    <script>
+        const { ipcRenderer, remote } = require('electron');
+        const currentWindow = remote.getCurrentWindow();
+
+        // Elementos DOM
+        const tabs = document.querySelectorAll('.tab');
+        const transcriptView = document.getElementById('transcriptView');
+        const suggestionsView = document.getElementById('suggestionsView');
+        const actionsView = document.getElementById('actionsView');
+        const miniAiInput = document.getElementById('miniAiInput');
+        const quickInput = document.getElementById('quickInput');
+        const quickSend = document.getElementById('quickSend');
+        const minimizeBtn = document.getElementById('minimizeBtn');
+        const pinBtn = document.getElementById('pinBtn');
+        const closeBtn = document.getElementById('closeBtn');
+
+        // Estado
+        let isPinned = true;
+        let currentView = 'transcript';
+        let recentTranscripts = [];
+
+        // Event Listeners
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
+
+        minimizeBtn.addEventListener('click', () => currentWindow.minimize());
+        closeBtn.addEventListener('click', () => currentWindow.hide());
+        
+        pinBtn.addEventListener('click', () => {
+            isPinned = !isPinned;
+            currentWindow.setAlwaysOnTop(isPinned);
+            pinBtn.style.color = isPinned ? '#6366f1' : '#e0e0e0';
+        });
+
+        // Quick actions
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.action-btn')) {
+                const action = e.target.closest('.action-btn').dataset.action;
+                handleQuickAction(action);
+            }
+        });
+
+        quickSend.addEventListener('click', sendQuickMessage);
+        quickInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendQuickMessage();
+        });
+
+        // Funciones
+        function switchTab(tabName) {
+            tabs.forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabName);
+            });
+
+            transcriptView.style.display = tabName === 'transcript' ? 'block' : 'none';
+            suggestionsView.style.display = tabName === 'suggestions' ? 'block' : 'none';
+            actionsView.style.display = tabName === 'actions' ? 'flex' : 'none';
+            
+            currentView = tabName;
+        }
+
+        function handleQuickAction(action) {
+            switch(action) {
+                case 'ai-chat':
+                    miniAiInput.style.display = miniAiInput.style.display === 'block' ? 'none' : 'block';
+                    if (miniAiInput.style.display === 'block') {
+                        quickInput.focus();
+                    }
+                    break;
+                case 'translate':
+                    if (recentTranscripts.length > 0) {
+                        const lastTranscript = recentTranscripts[recentTranscripts.length - 1];
+                        // Enviar solicitud de traducción
+                        ipcRenderer.send('quick-translate', lastTranscript.text);
+                    }
+                    break;
+                case 'summarize':
+                    ipcRenderer.send('request-summary');
+                    break;
+                case 'suggest':
+                    ipcRenderer.send('request-suggestions', 'question');
+                    break;
+                case 'explain':
+                    // Podría abrir un diálogo para ingresar el término
+                    const term = prompt('¿Qué término quieres que explique?');
+                    if (term) {
+                        ipcRenderer.send('explain-term', term);
+                    }
+                    break;
+            }
+        }
+
+        async function sendQuickMessage() {
+            const message = quickInput.value.trim();
+            if (!message) return;
+
+            quickInput.value = '';
+            
+            // Enviar al proceso principal
+            const response = await ipcRenderer.invoke('ask-gemini', message, {
+                isQuickQuestion: true
+            });
+
+            if (response.success) {
+                // Mostrar respuesta en una notificación o en el overlay
+                showQuickResponse(response.response.answer);
+            }
+        }
+
+        function showQuickResponse(answer) {
+            const responseDiv = document.createElement('div');
+            responseDiv.className = 'transcript-line current';
+            responseDiv.innerHTML = `
+                <div style="color: #6366f1; font-size: 11px; margin-bottom: 4px;">AI Assistant</div>
+                <div>${answer}</div>
+            `;
+            
+            transcriptView.insertBefore(responseDiv, transcriptView.firstChild);
+            
+            // Auto-switch to transcript view
+            switchTab('transcript');
+        }
+
+        // Recibir transcripciones
+        ipcRenderer.on('transcription', (event, data) => {
+            if (currentView === 'transcript') {
+                addTranscriptLine(data);
+            }
+            
+            // Guardar para referencia
+            recentTranscripts.push(data);
+            if (recentTranscripts.length > 10) {
+                recentTranscripts.shift();
+            }
+        });
+
+        // Recibir traducciones
+        ipcRenderer.on('translation', (event, data) => {
+            if (currentView === 'transcript') {
+                addTranslationToLastLine(data);
+            }
+        });
+
+        function addTranscriptLine(data) {
+            // Limpiar mensaje inicial
+            if (transcriptView.querySelector('p')) {
+                transcriptView.innerHTML = '';
+            }
+
+            const line = document.createElement('div');
+            line.className = `transcript-line ${data.language} ${data.isFinal ? '' : 'current'}`;
+            line.innerHTML = `
+                <div style="font-size: 11px; color: #888; margin-bottom: 2px;">
+                    ${data.language.toUpperCase()} - ${new Date(data.timestamp).toLocaleTimeString()}
+                </div>
+                <div>${data.text}</div>
+            `;
+            
+            transcriptView.appendChild(line);
+            transcriptView.scrollTop = transcriptView.scrollHeight;
+            
+            // Mantener solo las últimas 20 líneas
+            while (transcriptView.children.length > 20) {
+                transcriptView.removeChild(transcriptView.firstChild);
+            }
+        }
+
+        function addTranslationToLastLine(data) {
+            const lastLine = transcriptView.lastElementChild;
+            if (lastLine && !lastLine.querySelector('.translation-mini')) {
+                const translation = document.createElement('div');
+                translation.className = 'translation-mini';
+                translation.textContent = data.translatedText;
+                lastLine.appendChild(translation);
+            }
+        }
+
+        // Resize functionality
+        let isResizing = false;
+        const resizeHandle = document.querySelector('.resize-handle');
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.addEventListener('mousemove', handleResize);
+            document.addEventListener('mouseup', stopResize);
+        });
+
+        function handleResize(e) {
+            if (!isResizing) return;
+            
+            const newWidth = e.clientX;
+            const newHeight = e.clientY;
+            
+            currentWindow.setSize(
+                Math.max(300, newWidth),
+                Math.max(200, newHeight)
+            );
+        }
+
+        function stopResize() {
+            isResizing = false;
+            document.removeEventListener('mousemove', handleResize);
+            document.removeEventListener('mouseup', stopResize);
+        }
+    </script>
+</body>
+</html>

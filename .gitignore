@@ -1,0 +1,6 @@
+credentials/
+*.json
+.env
+node_modules/
+bin/
+test_audio.wav
