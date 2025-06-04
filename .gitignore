@@ -4,3 +4,7 @@ credentials/
 node_modules/
 bin/
 test_audio.wav
+
+*.wav
+test*
+debug*

@@ -30,13 +30,17 @@ class AudioCapture extends EventEmitter {
       // Esto capturará el audio del sistema (lo que escuchas)
       this.captureProcess = spawn(ffmpegPath, [
         '-f', 'dshow',
-        '-i', 'audio=Stereo Mix (Realtek(R) Audio)', // Nombre exacto sin comillas extras
+        '-i', 'audio=Stereo Mix (Realtek(R) Audio)',
         '-acodec', 'pcm_s16le',
         '-ar', '16000',
         '-ac', '1',
         '-f', 's16le',
-        '-'
-      ]);
+        '-fflags', 'nobuffer',
+        '-flags', 'low_delay',
+        'pipe:1' // Explícitamente enviar a stdout
+      ], {
+        stdio: ['ignore', 'pipe', 'pipe'] // stdin, stdout, stderr
+      });
 
       this.isCapturing = true;
       this.audioBuffer = [];
@@ -48,7 +52,12 @@ class AudioCapture extends EventEmitter {
 
       // Manejar errores
       this.captureProcess.stderr.on('data', (data) => {
-        console.error('FFmpeg error:', data.toString());
+        // FFmpeg envía información de progreso a stderr, no es necesariamente un error
+        const output = data.toString();
+        if (output.includes('error') || output.includes('Error')) {
+          console.error('FFmpeg error real:', output);
+        }
+        // No mostrar el progreso normal como error
       });
 
       this.captureProcess.on('error', (error) => {
@@ -60,6 +69,11 @@ class AudioCapture extends EventEmitter {
       this.captureProcess.on('close', (code) => {
         console.log(`Proceso de captura terminado con código ${code}`);
         this.isCapturing = false;
+        
+        // No intentar reiniciar automáticamente, solo registrar
+        if (code !== 0 && code !== null) {
+          console.error('FFmpeg se cerró con código de error:', code);
+        }
       });
 
       // Intentar con diferentes dispositivos si falla
@@ -77,6 +91,8 @@ class AudioCapture extends EventEmitter {
 
   async tryAlternativeCapture() {
     // Método alternativo usando node-record-lpcm16
+    console.log('Intentando método alternativo de captura...');
+    
     try {
       const record = require('node-record-lpcm16');
       
@@ -114,18 +130,34 @@ class AudioCapture extends EventEmitter {
     // Calcular el tamaño total del buffer
     const totalSize = this.audioBuffer.reduce((acc, buf) => acc + buf.length, 0);
     
-    // Si tenemos suficiente audio (aproximadamente 1 segundo), emitir
-    if (totalSize >= this.bufferSize * 2) { // *2 porque es 16-bit audio
+    // Si tenemos suficiente audio (aproximadamente 0.5 segundos), emitir
+    if (totalSize >= this.bufferSize) { // Reducido para enviar más frecuentemente
       const combinedBuffer = Buffer.concat(this.audioBuffer);
-      this.emit('audioData', combinedBuffer);
       
-      // Limpiar el buffer, manteniendo un pequeño overlap
-      const overlap = this.audioBuffer[this.audioBuffer.length - 1];
-      this.audioBuffer = [overlap];
+      // Verificar que haya audio real (no silencio)
+      let hasAudio = false;
+      for (let i = 0; i < combinedBuffer.length; i += 2) {
+        const sample = combinedBuffer.readInt16LE(i);
+        if (Math.abs(sample) > 100) { // Umbral de silencio
+          hasAudio = true;
+          break;
+        }
+      }
+      
+      // Solo emitir si hay audio real
+      if (hasAudio) {
+        this.emit('audioData', combinedBuffer);
+      }
+      
+      // Limpiar el buffer
+      this.audioBuffer = [];
     }
   }
 
   stopCapture() {
+    console.log('Deteniendo captura de audio...');
+    this.isCapturing = false;
+    
     if (this.captureProcess) {
       if (this.captureProcess.kill) {
         this.captureProcess.kill('SIGTERM');
@@ -134,7 +166,6 @@ class AudioCapture extends EventEmitter {
       }
       this.captureProcess = null;
     }
-    this.isCapturing = false;
     this.audioBuffer = [];
   }
 

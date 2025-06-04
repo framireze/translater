@@ -1,19 +1,53 @@
 const speech = require('@google-cloud/speech');
+const fs = require('fs');
+const { EventEmitter } = require('events');
 
-class TranscriptionService {
+class TranscriptionService extends EventEmitter {
   constructor(keyFilePath) {
-    this.client = new speech.SpeechClient({
-      keyFilename: keyFilePath
-    });
+    super();
+    this.mockMode = false;
+    
+    try {
+      // Verificar si el archivo existe y es válido
+      if (!fs.existsSync(keyFilePath)) {
+        console.log('⚠️  Archivo de credenciales no encontrado, usando modo mock');
+        this.mockMode = true;
+      } else {
+        const credentials = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
+        if (credentials.project_id === 'dummy-project') {
+          console.log('📌 Usando transcripción en modo mock (sin Google Cloud)');
+          this.mockMode = true;
+        } else {
+          this.client = new speech.SpeechClient({
+            keyFilename: keyFilePath
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error inicializando servicio de transcripción:', error);
+      this.mockMode = true;
+    }
     
     this.recognizeStream = null;
     this.isStreaming = false;
     this.restartCounter = 0;
     this.lastTranscript = '';
-    console.log('TranscriptionService inicializado con:', keyFilePath);
+    this.mockCounter = 0;
+    this.lastResult = null; // Agregar esta línea
+    
+    // TEMPORAL: Activar modo mock para pruebas
+    // this.mockMode = true;
+    console.log('TranscriptionService inicializado - Mock:', this.mockMode);
   }
 
   async startStreamingRecognition() {
+    console.log('Iniciando streaming de transcripción...this.mockMode', this.mockMode);
+    if (this.mockMode) {
+      // Modo mock - no hacer nada
+      this.isStreaming = true;
+      return;
+    }
+
     if (this.isStreaming) return;
 
     const config = {
@@ -53,6 +87,7 @@ class TranscriptionService {
         this.handleStreamError(error);
       })
       .on('data', (data) => {
+        console.log('Datos recibidos:', data);
         this.processTranscriptionData(data);
       });
 
@@ -67,6 +102,34 @@ class TranscriptionService {
   }
 
   async transcribe(audioBuffer) {
+    if (this.mockMode) {
+      // Simular transcripción en modo mock
+      this.mockCounter++;
+      
+      // Cada 3 segundos, generar una transcripción de prueba
+      if (this.mockCounter % 3 === 0) {
+        const mockPhrases = [
+          "Esta es una transcripción de prueba",
+          "El audio se está capturando correctamente",
+          "Modo mock activado - configura Google Cloud para transcripción real",
+          "Testing the English transcription",
+          "This is a mock transcription in English"
+        ];
+        
+        const randomPhrase = mockPhrases[Math.floor(Math.random() * mockPhrases.length)];
+        const isFinal = Math.random() > 0.5;
+        const language = randomPhrase.includes('English') || randomPhrase.includes('Testing') ? 'en' : 'es';
+        
+        return {
+          text: randomPhrase,
+          isFinal: isFinal,
+          confidence: 0.95,
+          language: language,
+          timestamp: new Date().toISOString()
+        };
+      }
+      return null;
+    }
     try {
       if (!this.isStreaming) {
         await this.startStreamingRecognition();
@@ -83,7 +146,6 @@ class TranscriptionService {
   }
 
   processTranscriptionData(data) {
-    console.log('Procesando datos de transcripción:', data);
     if (data.results && data.results[0]) {
       const result = data.results[0];
       
@@ -97,7 +159,7 @@ class TranscriptionService {
         if (result.languageCode) {
           detectedLanguage = result.languageCode.split('-')[0];
         }
-
+        
         const transcriptionResult = {
           text: transcript,
           isFinal: isFinal,
@@ -107,8 +169,11 @@ class TranscriptionService {
         };
 
         // Solo emitir si hay cambios significativos
-        if (transcript !== this.lastTranscript) {
+        if (transcript !== this.lastTranscript && transcript.trim().length > 0) {
           this.lastTranscript = transcript;
+          // 👇 Aquí emites el evento
+        this.emit('transcription', transcriptionResult);
+
           return transcriptionResult;
         }
       }
@@ -133,15 +198,20 @@ class TranscriptionService {
 
   async restartStream() {
     this.restartCounter++;
-    console.log(`Reiniciando stream (intento ${this.restartCounter})...`);
+    console.log(`Reiniciando stream de transcripción (intento ${this.restartCounter})...`);
     
     this.stopStreaming();
     
     // Esperar un momento antes de reiniciar
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     if (this.restartCounter < 10) {
-      await this.startStreamingRecognition();
+      try {
+        await this.startStreamingRecognition();
+        console.log('Stream reiniciado exitosamente');
+      } catch (error) {
+        console.error('Error reiniciando stream:', error);
+      }
     } else {
       console.error('Demasiados reintentos, deteniendo servicio');
     }
@@ -151,6 +221,10 @@ class TranscriptionService {
     if (this.recognizeStream) {
       this.recognizeStream.end();
       this.recognizeStream = null;
+    }
+    if (this.streamRestartTimer) {
+      clearTimeout(this.streamRestartTimer);
+      this.streamRestartTimer = null;
     }
     this.isStreaming = false;
   }
