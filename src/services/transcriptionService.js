@@ -41,7 +41,6 @@ class TranscriptionService extends EventEmitter {
   }
 
   async startStreamingRecognition() {
-    console.log('Iniciando streaming de transcripción...this.mockMode', this.mockMode);
     if (this.mockMode) {
       // Modo mock - no hacer nada
       this.isStreaming = true;
@@ -87,7 +86,6 @@ class TranscriptionService extends EventEmitter {
         this.handleStreamError(error);
       })
       .on('data', (data) => {
-        console.log('Datos recibidos:', data);
         this.processTranscriptionData(data);
       });
 
@@ -159,22 +157,39 @@ class TranscriptionService extends EventEmitter {
         if (result.languageCode) {
           detectedLanguage = result.languageCode.split('-')[0];
         }
-        
-        const transcriptionResult = {
-          text: transcript,
-          isFinal: isFinal,
-          confidence: confidence,
-          language: detectedLanguage,
-          timestamp: new Date().toISOString()
-        };
 
-        // Solo emitir si hay cambios significativos
-        if (transcript !== this.lastTranscript && transcript.trim().length > 0) {
-          this.lastTranscript = transcript;
-          // 👇 Aquí emites el evento
-        this.emit('transcription', transcriptionResult);
-
+        // Si es un resultado final, emitir la transcripción completa
+        if (isFinal) {
+          const transcriptionResult = {
+            text: transcript,
+            isFinal: true,
+            confidence: confidence,
+            language: detectedLanguage,
+            timestamp: new Date().toISOString()
+          };
+          
+          console.log('Transcripción final:', transcript);
+          this.emit('transcription', transcriptionResult);
+          
+          // Limpiar el último transcript para la próxima oración
+          this.lastTranscript = '';
           return transcriptionResult;
+        } else {
+          // Emitir actualizaciones parciales para mostrar que está escuchando
+          if (transcript !== this.lastTranscript && transcript.trim().length > 0) {
+            this.lastTranscript = transcript;
+            
+            const interimResult = {
+              text: transcript,
+              isFinal: false,
+              confidence: confidence,
+              language: detectedLanguage,
+              timestamp: new Date().toISOString()
+            };
+            
+            // Emitir resultado parcial
+            this.emit('interim-transcription', interimResult);
+          }
         }
       }
     }

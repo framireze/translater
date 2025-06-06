@@ -555,7 +555,41 @@
 
         // Recibir transcripciones
         ipcRenderer.on('transcription', (event, data) => {
-            addTranscript(data);
+            // Solo añadir transcripciones finales
+            if (data.isFinal) {
+                addTranscript(data);
+            }
+        });
+
+        // Recibir transcripciones parciales (opcional - para mostrar que está escuchando)
+        let currentInterimDiv = null;
+        ipcRenderer.on('interim-transcription', (event, data) => {
+            // Mostrar texto temporal mientras habla
+            if (!currentInterimDiv) {
+                currentInterimDiv = document.createElement('div');
+                currentInterimDiv.className = 'transcript-item interim';
+                currentInterimDiv.style.opacity = '0.6';
+                currentInterimDiv.style.fontStyle = 'italic';
+                transcriptContainer.appendChild(currentInterimDiv);
+            }
+            
+            currentInterimDiv.innerHTML = `
+                <div class="transcript-header">
+                    <span class="language-badge ${data.language}">${data.language}</span>
+                    <span class="timestamp">Escuchando...</span>
+                </div>
+                <div class="transcript-text">${data.text}</div>
+            `;
+            
+            transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+        });
+
+        // Cuando llega una transcripción final, remover el interim
+        ipcRenderer.on('transcription', (event, data) => {
+            if (data.isFinal && currentInterimDiv) {
+                currentInterimDiv.remove();
+                currentInterimDiv = null;
+            }
         });
 
         // Recibir traducciones

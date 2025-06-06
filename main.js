@@ -123,8 +123,7 @@ function createTray() {
   tray.setContextMenu(contextMenu);
 } catch (error) {
   console.error('Error creando el tray:', error);
-}
-}
+}}
 
 // Inicializar servicios
 function initializeServices() {
@@ -197,6 +196,17 @@ ipcMain.handle('start-capture', async () => {
         } catch (error) {
           console.error('Error traduciendo:', error);
         }
+      }
+    });
+    
+    // Listener para transcripciones parciales
+    transcriptionService.on('interim-transcription', (transcription) => {
+      // Enviar a las ventanas sin traducir (son temporales)
+      if (mainWindow) {
+        mainWindow.webContents.send('interim-transcription', transcription);
+      }
+      if (overlayWindow) {
+        overlayWindow.webContents.send('interim-transcription', transcription);
       }
     });
     
@@ -273,6 +283,36 @@ ipcMain.handle('toggle-overlay', () => {
   }
 });
 
+
+// IPC for Overlay:
+ipcMain.on('window-minimize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.minimize();
+});
+
+ipcMain.on('window-hide', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.hide();
+});
+
+ipcMain.on('window-pin', (event, isPinned) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.setAlwaysOnTop(isPinned);
+});
+
+ipcMain.on('window-resize', (event, { deltaX, deltaY }) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+      const [width, height] = win.getSize();
+      win.setSize(
+          Math.max(300, width + deltaX),
+          Math.max(200, height + deltaY)
+      );
+  }
+});
+
+// FIN DE IPC's Overlay
+
 // App events
 app.whenReady().then(async () => {
   try {
@@ -283,6 +323,17 @@ app.whenReady().then(async () => {
   } catch (error) {
     console.error('Error durante la inicialización:', error);
   }
+});
+
+// Manejar errores no capturados
+process.on('uncaughtException', (error) => {
+  console.error('Error no capturado:', error);
+  // No cerrar la aplicación
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Promesa rechazada no manejada:', reason);
+  // No cerrar la aplicación
 });
 
 app.on('window-all-closed', () => {

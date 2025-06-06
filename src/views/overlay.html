@@ -408,8 +408,8 @@
     </div>
 
     <script>
-        const { ipcRenderer, remote } = require('electron');
-        const currentWindow = remote.getCurrentWindow();
+        // IMPORTANTE: No usar 'remote', usar ipcRenderer para comunicarse con el main process
+        const { ipcRenderer } = require('electron');
 
         // Elementos DOM
         const tabs = document.querySelectorAll('.tab');
@@ -428,18 +428,24 @@
         let currentView = 'transcript';
         let recentTranscripts = [];
 
-        // Event Listeners
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        // Event Listeners para controles de ventana
+        minimizeBtn.addEventListener('click', () => {
+            ipcRenderer.send('window-minimize');
         });
 
-        minimizeBtn.addEventListener('click', () => currentWindow.minimize());
-        closeBtn.addEventListener('click', () => currentWindow.hide());
+        closeBtn.addEventListener('click', () => {
+            ipcRenderer.send('window-hide');
+        });
         
         pinBtn.addEventListener('click', () => {
             isPinned = !isPinned;
-            currentWindow.setAlwaysOnTop(isPinned);
+            ipcRenderer.send('window-pin', isPinned);
             pinBtn.style.color = isPinned ? '#6366f1' : '#e0e0e0';
+        });
+
+        // Event Listeners para tabs
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
         });
 
         // Quick actions
@@ -586,10 +592,14 @@
 
         // Resize functionality
         let isResizing = false;
+        let startX = 0;
+        let startY = 0;
         const resizeHandle = document.querySelector('.resize-handle');
 
         resizeHandle.addEventListener('mousedown', (e) => {
             isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
             document.addEventListener('mousemove', handleResize);
             document.addEventListener('mouseup', stopResize);
         });
@@ -597,13 +607,14 @@
         function handleResize(e) {
             if (!isResizing) return;
             
-            const newWidth = e.clientX;
-            const newHeight = e.clientY;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
             
-            currentWindow.setSize(
-                Math.max(300, newWidth),
-                Math.max(200, newHeight)
-            );
+            // Enviar la diferencia al main process para redimensionar
+            ipcRenderer.send('window-resize', { deltaX, deltaY });
+            
+            startX = e.clientX;
+            startY = e.clientY;
         }
 
         function stopResize() {
