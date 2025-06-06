@@ -106,6 +106,8 @@
             flex: 1;
             padding: 30px;
             overflow-y: auto;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
         }
 
         .transcript-container {
@@ -344,20 +346,43 @@
 
         /* Scrollbar personalizada */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 12px;
         }
 
         ::-webkit-scrollbar-track {
             background: #1a1a1a;
+            border-radius: 6px;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #444;
-            border-radius: 4px;
+            background: #555;
+            border-radius: 6px;
+            border: 2px solid #1a1a1a;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #555;
+            background: #666;
+        }
+        
+        /* Hacer scrollbar más visible en el área de transcripción */
+        .transcription-area::-webkit-scrollbar {
+            width: 14px;
+        }
+        
+        .transcription-area::-webkit-scrollbar-track {
+            background: #2a2a2a;
+            border-radius: 7px;
+            margin: 10px 0;
+        }
+        
+        .transcription-area::-webkit-scrollbar-thumb {
+            background: #6366f1;
+            border-radius: 7px;
+            border: 2px solid #2a2a2a;
+        }
+        
+        .transcription-area::-webkit-scrollbar-thumb:hover {
+            background: #8b5cf6;
         }
 
         /* Loading Animation */
@@ -609,7 +634,11 @@
             `;
             
             transcriptContainer.appendChild(item);
-            transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+            
+            // Scroll automático mejorado
+            setTimeout(() => {
+                item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 100);
             
             // Actualizar contador de palabras
             if (data.isFinal) {

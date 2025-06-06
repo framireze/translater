@@ -70,16 +70,17 @@ class AudioCapture extends EventEmitter {
         console.log(`Proceso de captura terminado con código ${code}`);
         this.isCapturing = false;
         
-        // No intentar reiniciar automáticamente, solo registrar
-        if (code !== 0 && code !== null) {
-          console.error('FFmpeg se cerró con código de error:', code);
+        // No intentar método alternativo si se cerró intencionalmente
+        if (code === null || code === 0) {
+          return;
         }
       });
 
       // Intentar con diferentes dispositivos si falla
       setTimeout(() => {
-        if (!this.isCapturing) {
-          this.tryAlternativeCapture();
+        if (!this.isCapturing && this.captureProcess) {
+          // No llamar a tryAlternativeCapture, solo loguear
+          console.log('La captura se detuvo inesperadamente');
         }
       }, 2000);
 

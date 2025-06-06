@@ -33,7 +33,12 @@ class TranscriptionService extends EventEmitter {
     this.restartCounter = 0;
     this.lastTranscript = '';
     this.mockCounter = 0;
-    this.lastResult = null; // Agregar esta línea
+    this.lastResult = null;
+    this.silenceTimeout = null;
+    this.lastAudioTime = Date.now();
+    this.interimTranscript = '';
+    this.lastRestartTime = null;
+    this.lastEmittedTranscript = ''; // Para evitar duplicados
     
     // TEMPORAL: Activar modo mock para pruebas
     // this.mockMode = true;
@@ -160,22 +165,47 @@ class TranscriptionService extends EventEmitter {
 
         // Si es un resultado final, emitir la transcripción completa
         if (isFinal) {
-          const transcriptionResult = {
+          // Solo emitir si no es duplicado
+          if (transcript !== this.lastEmittedTranscript) {
+            const transcriptionResult = {
+              text: transcript,
+              isFinal: true,
+              confidence: confidence,
+              language: detectedLanguage,
+              timestamp: new Date().toISOString()
+            };
+            
+            console.log('Transcripción final:', transcript);
+            this.emit('transcription', transcriptionResult);
+            
+            // Guardar lo que emitimos
+            this.lastEmittedTranscript = transcript;
+          }
+          
+          // IMPORTANTE: Limpiar TODOS los estados después de emitir final
+          this.lastTranscript = '';
+          this.interimTranscript = '';
+          this.clearSilenceTimeout();
+          
+          // Después de un resultado final, Google empieza fresh
+          this.lastEmittedTranscript = '';
+          
+          return transcript !== this.lastEmittedTranscript ? {
             text: transcript,
             isFinal: true,
             confidence: confidence,
             language: detectedLanguage,
             timestamp: new Date().toISOString()
-          };
-          
-          console.log('Transcripción final:', transcript);
-          this.emit('transcription', transcriptionResult);
-          
-          // Limpiar el último transcript para la próxima oración
-          this.lastTranscript = '';
-          return transcriptionResult;
+          } : null;
         } else {
-          // Emitir actualizaciones parciales para mostrar que está escuchando
+          // Para resultados interim, NO acumular con texto anterior
+          // Google ya maneja la acumulación internamente
+          this.interimTranscript = transcript;
+          
+          // Reiniciar el timeout de silencio
+          this.resetSilenceTimeout();
+          
+          // Emitir actualizaciones parciales
           if (transcript !== this.lastTranscript && transcript.trim().length > 0) {
             this.lastTranscript = transcript;
             
@@ -187,7 +217,6 @@ class TranscriptionService extends EventEmitter {
               timestamp: new Date().toISOString()
             };
             
-            // Emitir resultado parcial
             this.emit('interim-transcription', interimResult);
           }
         }
@@ -196,10 +225,68 @@ class TranscriptionService extends EventEmitter {
     return null;
   }
 
+  // Método para manejar el timeout de silencio
+  resetSilenceTimeout() {
+    this.clearSilenceTimeout();
+    
+    // Crear nuevo timeout de 3 segundos
+    this.silenceTimeout = setTimeout(() => {
+      console.log('Silencio detectado - finalizando transcripción actual');
+      
+      // Solo emitir si hay texto nuevo que no se ha emitido
+      if (this.interimTranscript && 
+          this.interimTranscript.trim().length > 0 && 
+          this.interimTranscript !== this.lastEmittedTranscript &&
+          !this.interimTranscript.startsWith(this.lastEmittedTranscript)) {
+        
+        const finalResult = {
+          text: this.interimTranscript,
+          isFinal: true,
+          confidence: 1,
+          language: 'es',
+          timestamp: new Date().toISOString(),
+          forcedByTimeout: true
+        };
+        
+        this.emit('transcription', finalResult);
+        this.lastEmittedTranscript = this.interimTranscript;
+        
+        // Limpiar estados
+        this.interimTranscript = '';
+        this.lastTranscript = '';
+      }
+    }, 3000); // 3 segundos de silencio
+  }
+
+  clearSilenceTimeout() {
+    if (this.silenceTimeout) {
+      clearTimeout(this.silenceTimeout);
+      this.silenceTimeout = null;
+    }
+  }
+
   handleStreamError(error) {
     if (error.code === 11) {
-      // Error de timeout, reiniciar stream
-      console.log('Timeout del stream, reiniciando...');
+      // Error de timeout, finalizar cualquier transcripción pendiente
+      console.log('Timeout del stream - finalizando transcripción pendiente');
+      
+      // Si hay texto interim, emitirlo como final antes de reiniciar
+      if (this.interimTranscript && this.interimTranscript.trim().length > 0) {
+        const finalResult = {
+          text: this.interimTranscript,
+          isFinal: true,
+          confidence: 1,
+          language: 'es',
+          timestamp: new Date().toISOString(),
+          forcedByTimeout: true
+        };
+        
+        this.emit('transcription', finalResult);
+        this.interimTranscript = '';
+        this.lastTranscript = '';
+      }
+      
+      // Ahora sí reiniciar el stream
       this.restartStream();
     } else if (error.code === 3 || error.code === 4) {
       // Error de límite de duración
@@ -207,7 +294,8 @@ class TranscriptionService extends EventEmitter {
       this.restartStream();
     } else {
       console.error('Error no manejado:', error);
-      this.stopStreaming();
+      // Para otros errores, intentar reiniciar también
+      this.restartStream();
     }
   }
 
@@ -215,10 +303,22 @@ class TranscriptionService extends EventEmitter {
     this.restartCounter++;
     console.log(`Reiniciando stream de transcripción (intento ${this.restartCounter})...`);
     
+    // Limpiar TODOS los estados antes de reiniciar
+    this.clearSilenceTimeout();
+    this.interimTranscript = '';
+    this.lastTranscript = '';
+    this.lastEmittedTranscript = '';
+    
     this.stopStreaming();
     
     // Esperar un momento antes de reiniciar
     await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Resetear el contador si han pasado más de 5 minutos desde el último reinicio
+    if (this.lastRestartTime && Date.now() - this.lastRestartTime > 300000) {
+      this.restartCounter = 0;
+    }
+    this.lastRestartTime = Date.now();
     
     if (this.restartCounter < 10) {
       try {
@@ -229,6 +329,7 @@ class TranscriptionService extends EventEmitter {
       }
     } else {
       console.error('Demasiados reintentos, deteniendo servicio');
+      this.emit('error', new Error('Servicio de transcripción detenido por múltiples errores'));
     }
   }
 
@@ -241,6 +342,8 @@ class TranscriptionService extends EventEmitter {
       clearTimeout(this.streamRestartTimer);
       this.streamRestartTimer = null;
     }
+    // Limpiar timeout de silencio
+    this.clearSilenceTimeout();
     this.isStreaming = false;
   }
 
