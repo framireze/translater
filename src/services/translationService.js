@@ -11,7 +11,7 @@ class TranslationService {
     this.cacheMaxSize = 1000;
   }
 
-  async translate(text, sourceLang, targetLang) {
+  async translate(text, sourceLang, targetLang, transcriptId) {
     if (!text || text.trim() === '') {
       return null;
     }
@@ -33,7 +33,8 @@ class TranslationService {
         translatedText: translation,
         sourceLang: sourceLang,
         targetLang: targetLang,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        transcriptId: transcriptId
       };
 
       // Guardar en cache

@@ -1,11 +1,13 @@
 const speech = require('@google-cloud/speech');
 const fs = require('fs');
 const { EventEmitter } = require('events');
+const { v4: uuidv4 } = require('uuid');
 
 class TranscriptionService extends EventEmitter {
   constructor(keyFilePath) {
     super();
     this.mockMode = false;
+    this.lastTranscriptId = uuidv4();
     
     try {
       // Verificar si el archivo existe y es válido
@@ -172,7 +174,8 @@ class TranscriptionService extends EventEmitter {
               isFinal: true,
               confidence: confidence,
               language: detectedLanguage,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              transcriptId: this.lastTranscriptId
             };
             
             console.log('Transcripción final:', transcript);
@@ -189,7 +192,8 @@ class TranscriptionService extends EventEmitter {
           
           // Después de un resultado final, Google empieza fresh
           this.lastEmittedTranscript = '';
-          
+          // Resetear el ID de la transcripción
+          this.lastTranscriptId = uuidv4();
           return transcript !== this.lastEmittedTranscript ? {
             text: transcript,
             isFinal: true,
@@ -197,6 +201,7 @@ class TranscriptionService extends EventEmitter {
             language: detectedLanguage,
             timestamp: new Date().toISOString()
           } : null;
+          
         } else {
           // Para resultados interim, NO acumular con texto anterior
           // Google ya maneja la acumulación internamente
@@ -214,7 +219,8 @@ class TranscriptionService extends EventEmitter {
               isFinal: false,
               confidence: confidence,
               language: detectedLanguage,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              transcriptId: this.lastTranscriptId
             };
             
             this.emit('interim-transcription', interimResult);

@@ -184,7 +184,8 @@ ipcMain.handle('start-capture', async () => {
           const translation = await translationService.translate(
             transcription.text, 
             transcription.language, 
-            'es'
+            'es',
+            transcription.transcriptId
           );
           
           if (mainWindow && translation) {
