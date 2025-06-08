@@ -2,7 +2,7 @@ const { Translate } = require('@google-cloud/translate').v2;
 
 class TranslationService {
   constructor(keyFilePath) {
-    this.translate = new Translate({
+    this.googleTranslate = new Translate({
       keyFilename: keyFilePath
     });
     
@@ -23,7 +23,7 @@ class TranslationService {
     }
 
     try {
-      const [translation] = await this.translate.translate(text, {
+      const [translation] = await this.googleTranslate.translate(text, {
         from: sourceLang,
         to: targetLang
       });
@@ -54,7 +54,7 @@ class TranslationService {
 
   async detectLanguage(text) {
     try {
-      const [detection] = await this.translate.detect(text);
+      const [detection] = await this.googleTranslate.detect(text);
       return {
         language: detection.language,
         confidence: detection.confidence
@@ -97,7 +97,7 @@ class TranslationService {
   // Método para obtener idiomas soportados
   async getSupportedLanguages(target = 'es') {
     try {
-      const [languages] = await this.translate.getLanguages(target);
+      const [languages] = await this.googleTranslate.getLanguages(target);
       return languages;
     } catch (error) {
       console.error('Error obteniendo idiomas:', error);

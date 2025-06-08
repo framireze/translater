@@ -300,8 +300,14 @@ class TranscriptionService extends EventEmitter {
   }
 
   async restartStream() {
-    this.restartCounter++;
-    console.log(`Reiniciando stream de transcripción (intento ${this.restartCounter})...`);
+    // No incrementar el contador si es un reinicio programado (no por error)
+    const isScheduledRestart = this.restartCounter === 0 || (Date.now() - this.lastRestartTime > 50000);
+    
+    if (!isScheduledRestart) {
+      this.restartCounter++;
+    }
+    
+    console.log(`Reiniciando stream de transcripción ${isScheduledRestart ? '(programado)' : `(intento ${this.restartCounter})`}...`);
     
     // Limpiar TODOS los estados antes de reiniciar
     this.clearSilenceTimeout();
@@ -314,13 +320,13 @@ class TranscriptionService extends EventEmitter {
     // Esperar un momento antes de reiniciar
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Resetear el contador si han pasado más de 5 minutos desde el último reinicio
+    // Resetear el contador si han pasado más de 5 minutos desde el último reinicio por error
     if (this.lastRestartTime && Date.now() - this.lastRestartTime > 300000) {
       this.restartCounter = 0;
     }
     this.lastRestartTime = Date.now();
     
-    if (this.restartCounter < 10) {
+    if (isScheduledRestart || this.restartCounter < 10) {
       try {
         await this.startStreamingRecognition();
         console.log('Stream reiniciado exitosamente');
@@ -328,7 +334,7 @@ class TranscriptionService extends EventEmitter {
         console.error('Error reiniciando stream:', error);
       }
     } else {
-      console.error('Demasiados reintentos, deteniendo servicio');
+      console.error('Demasiados reintentos por errores, deteniendo servicio');
       this.emit('error', new Error('Servicio de transcripción detenido por múltiples errores'));
     }
   }
