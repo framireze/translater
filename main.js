@@ -135,7 +135,7 @@ function initializeServices() {
     audioCapture = new AudioCapture();
     transcriptionService = new TranscriptionService(process.env.GOOGLE_CLOUD_KEY_PATH);
     translationService = new TranslationService(process.env.GOOGLE_CLOUD_KEY_PATH);
-    geminiService = new GeminiService(process.env.GEMINI_API_KEY || process.env.GOOGLE_CLOUD_KEY_PATH);
+    geminiService = new GeminiService(process.env.GOOGLE_CLOUD_KEY_PATH);
     
     console.log('Servicios inicializados correctamente');
   } catch (error) {
@@ -194,12 +194,17 @@ ipcMain.handle('start-capture', async () => {
           if (overlayWindow && translation) {
             overlayWindow.webContents.send('translation', translation);
           }
+          
         } catch (error) {
           console.error('Error traduciendo:', error);
         }
       }
+      console.log('geminiService', transcription.text)
+      if(geminiService){
+        let suggestGemini = await geminiService.askQuestion(transcription.text, transcription.transcriptId);
+        console.log('geminiService', suggestGemini)
+      }
     });
-    
     // Listener para transcripciones parciales
     transcriptionService.on('interim-transcription', (transcription) => {
       // Enviar a las ventanas sin traducir (son temporales)

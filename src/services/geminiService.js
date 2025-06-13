@@ -1,118 +1,189 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class GeminiService {
-  constructor(apiKeyOrConfig) {
-    // Detectar si es API Key simple o configuración para Vertex AI
-    if (typeof apiKeyOrConfig === 'string' && apiKeyOrConfig.startsWith('AIza')) {
-      // Usar Google AI Studio (Gemini API directa)
-      this.useVertexAI = false;
-      this.genAI = new GoogleGenerativeAI(apiKeyOrConfig);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
-    } else {
-      // Usar Vertex AI con Service Account
-      this.useVertexAI = true;
-      const { VertexAI } = require('@google-cloud/vertexai');
-      this.vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID || 'tu-proyecto',
-        location: 'us-central1',
-        keyFilename: process.env.GOOGLE_CLOUD_KEY_PATH
-      });
-      this.model = this.vertex_ai.preview.getGenerativeModel({
-        model: 'gemini-pro',
-        generation_config: {
-          max_output_tokens: 2048,
-          temperature: 0.9,
-          top_p: 1,
-        },
-      });
-    }
-    
-    // Historial de conversación para mantener contexto
+  constructor() {
+    this.history = [];
     this.conversationHistory = [];
     this.maxHistoryLength = 10;
+    this.chat = null; // Para mantener la sesión de chat
     
-    // Configuración del sistema
-    this.systemPrompt = `Eres un asistente experto para entrevistas técnicas y reuniones profesionales. 
-    Tu rol es:
-    - Ayudar con respuestas técnicas precisas y concisas
-    - Sugerir mejores formas de expresar ideas
-    - Proporcionar información relevante sobre tecnologías mencionadas
-    - Ayudar a formular preguntas inteligentes
-    - Dar contexto sobre mejores prácticas y estándares de la industria
-    
-    Mantén las respuestas breves y al punto, ideales para usar durante una conversación en tiempo real.`;
+    // Prompt del sistema para dar contexto a Gemini
+    this.systemPrompt = `Eres un asistente experto en desarrollo de software que ayuda durante entrevistas técnicas y reuniones. 
+    Proporciona respuestas concisas, precisas y profesionales.
+    Si es una pregunta técnica, incluye ejemplos de código cuando sea relevante.`;
+
+    try {
+      this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+      this.model = this.genAI.getGenerativeModel({
+        model: "gemini-2.5-pro-preview-06-05",
+        generationConfig: {
+          maxOutputTokens: 8192,
+          temperature: 0.7,
+          topP: 0.95,
+        }
+      });
+      
+      // Inicializar el chat con el contexto del sistema
+      this.initializeChat();
+      
+    } catch (error) {
+      console.error('Error al inicializar GeminiService:', error);
+      throw new Error(`No se pudo inicializar GeminiService: ${error.message}`);
+    }
+  }
+
+  initializeChat() {
+    this.chat = this.model.startChat({
+      history: [
+        {
+          role: "user",
+          parts: [{ text: this.systemPrompt }]
+        },
+        {
+          role: "model",
+          parts: [{ text: "Entendido. Estoy listo para ayudarte con preguntas técnicas y durante tus entrevistas. ¿En qué puedo asistirte?" }]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 8192,
+      }
+    });
   }
 
   async askQuestion(question, context = {}) {
     try {
-      // Construir el prompt con contexto
-      const prompt = this.buildPrompt(question, context);
+      console.log('Procesando pregunta:', question);
+      console.log('Contexto recibido:', context);
+
+      // Construir el mensaje con contexto
+      let contextualizedQuestion = this.buildContextualizedQuestion(question, context);
       
-      // Generar respuesta
-      const result = await this.model.generateContent(prompt);
+      // Si no hay chat o queremos reiniciar la conversación
+      if (!this.chat || context.newConversation) {
+        this.initializeChat();
+      }
+
+      // Enviar mensaje al chat
+      const result = await this.chat.sendMessage(contextualizedQuestion);
       const response = await result.response;
-      const text = response.text();
-      
-      // Guardar en historial
-      this.addToHistory(question, text);
-      
-      return {
-        answer: text,
-        timestamp: new Date().toISOString()
-      };
+
+      // Verificar si la respuesta se generó correctamente
+      if (response.candidates && response.candidates.length > 0) {
+        const candidate = response.candidates[0];
+        
+        if (candidate.finishReason === 'STOP') {
+          const text = response.text();
+          
+          // Guardar en historial
+          this.addToHistory(question, text, context);
+          
+          return {
+            answer: text,
+            timestamp: new Date().toISOString(),
+            context: context
+          };
+        } else {
+          console.error(`Respuesta no completada. Razón: ${candidate.finishReason}`);
+          if (candidate.finishReason === 'SAFETY') {
+            console.error('Bloqueado por seguridad:', candidate.safetyRatings);
+          }
+          throw new Error(`Respuesta incompleta: ${candidate.finishReason}`);
+        }
+      }
+
+      throw new Error('No se recibió respuesta válida del modelo');
+
     } catch (error) {
       console.error('Error con Gemini:', error);
+      
+      // Si hay un error, intentar reinicializar el chat
+      this.initializeChat();
+      
       return {
         answer: 'Lo siento, hubo un error al procesar tu pregunta. Por favor, intenta de nuevo.',
-        error: error.message
+        error: error.message,
+        timestamp: new Date().toISOString()
       };
     }
   }
 
-  buildPrompt(question, context) {
-    let prompt = this.systemPrompt + '\n\n';
-    
-    // Añadir contexto de la conversación actual si existe
+  buildContextualizedQuestion(question, context) {
+    let parts = [];
+
+    // Agregar contexto de la conversación actual
     if (context.currentTranscript) {
-      prompt += `Contexto de la conversación actual:\n${context.currentTranscript}\n\n`;
+      parts.push(`[Contexto de conversación actual: ${context.currentTranscript}]`);
     }
-    
-    // Añadir historial reciente
-    if (this.conversationHistory.length > 0) {
-      prompt += 'Historial reciente:\n';
-      this.conversationHistory.slice(-3).forEach(item => {
-        prompt += `Pregunta: ${item.question}\nRespuesta: ${item.answer}\n\n`;
-      });
-    }
-    
-    // Añadir información adicional del contexto
+
+    // Agregar tema de la reunión
     if (context.meetingTopic) {
-      prompt += `Tema de la reunión: ${context.meetingTopic}\n`;
+      parts.push(`[Tema de la reunión: ${context.meetingTopic}]`);
+    }
+
+    // Agregar tecnologías relevantes
+    if (context.techStack && context.techStack.length > 0) {
+      parts.push(`[Stack tecnológico: ${context.techStack.join(', ')}]`);
+    }
+
+    // Agregar rol o posición
+    if (context.role) {
+      parts.push(`[Rol: ${context.role}]`);
+    }
+
+    // Agregar nivel de detalle esperado
+    if (context.detailLevel) {
+      parts.push(`[Nivel de detalle: ${context.detailLevel}]`);
+    }
+
+    // Agregar idioma si es necesario
+    if (context.language) {
+      parts.push(`[Responder en: ${context.language}]`);
+    }
+
+    // Construir la pregunta final
+    if (parts.length > 0) {
+      return parts.join('\n') + '\n\n' + question;
     }
     
-    if (context.techStack) {
-      prompt += `Tecnologías relevantes: ${context.techStack.join(', ')}\n`;
+    return question;
+  }
+
+  addToHistory(question, answer, context = {}) {
+    const historyEntry = {
+      question,
+      answer,
+      context,
+      timestamp: new Date().toISOString()
+    };
+
+    this.conversationHistory.push(historyEntry);
+
+    // Mantener solo los últimos N elementos
+    if (this.conversationHistory.length > this.maxHistoryLength) {
+      this.conversationHistory = this.conversationHistory.slice(-this.maxHistoryLength);
     }
-    
-    prompt += `\nPregunta actual: ${question}\n`;
-    prompt += '\nProporciona una respuesta concisa y útil:';
-    
-    return prompt;
   }
 
   async generateSuggestions(transcript, type = 'response') {
     const prompts = {
-      response: `Basándote en esta conversación, sugiere 3 posibles respuestas breves y profesionales:\n\n${transcript}`,
-      question: `Basándote en esta conversación, sugiere 3 preguntas inteligentes que podría hacer:\n\n${transcript}`,
-      clarification: `Si necesitas aclarar algo de esta conversación, ¿qué preguntarías? Sugiere 2 aclaraciones:\n\n${transcript}`
+      response: `Basándote en esta conversación, sugiere 3 posibles respuestas breves y profesionales que podría dar el candidato:\n\n${transcript}\n\nFormato: Una respuesta por línea, sin numeración.`,
+      question: `Basándote en esta conversación, sugiere 3 preguntas inteligentes que el candidato podría hacer:\n\n${transcript}\n\nFormato: Una pregunta por línea, sin numeración.`,
+      clarification: `Si el candidato necesita aclarar algo de esta conversación, ¿qué debería preguntar? Sugiere 2 aclaraciones:\n\n${transcript}\n\nFormato: Una aclaración por línea, sin numeración.`
     };
-    
+
     try {
       const result = await this.model.generateContent(prompts[type]);
       const response = await result.response;
-      const suggestions = response.text().split('\n').filter(s => s.trim());
+      const text = response.text();
       
-      return suggestions.slice(0, 3); // Máximo 3 sugerencias
+      // Dividir por líneas y filtrar vacías
+      const suggestions = text
+        .split('\n')
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .slice(0, 3);
+
+      return suggestions;
     } catch (error) {
       console.error('Error generando sugerencias:', error);
       return [];
@@ -120,37 +191,49 @@ class GeminiService {
   }
 
   async analyzeConversation(fullTranscript) {
-    const prompt = `Analiza esta conversación de entrevista/reunión y proporciona:
-    1. Puntos clave discutidos
-    2. Compromisos o tareas mencionadas
-    3. Temas técnicos que requieren seguimiento
-    4. Resumen general en 2-3 oraciones
-    
-    Conversación:
-    ${fullTranscript}`;
-    
+    const prompt = `Analiza esta conversación de entrevista/reunión y proporciona un análisis estructurado:
+
+${fullTranscript}
+
+Proporciona:
+1. **Puntos clave discutidos**: Lista los temas principales
+2. **Compromisos o tareas**: Cualquier acción acordada
+3. **Temas técnicos mencionados**: Tecnologías, conceptos o problemas técnicos
+4. **Preguntas sin responder**: Si quedó algo pendiente
+5. **Resumen ejecutivo**: 2-3 oraciones con lo más importante
+
+Formato: Usa subtítulos claros para cada sección.`;
+
     try {
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
-      
+
       return {
         analysis: response.text(),
         timestamp: new Date().toISOString()
       };
     } catch (error) {
       console.error('Error analizando conversación:', error);
-      return null;
+      return {
+        analysis: 'No se pudo analizar la conversación.',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
     }
   }
 
-  async getQuickInfo(term) {
-    const prompt = `Proporciona una explicación muy breve (2-3 líneas) sobre: ${term}
-    Enfócate en lo más importante para una entrevista técnica.`;
+  async getQuickInfo(term, context = {}) {
+    const contextStr = context.techStack ? 
+      ` en el contexto de ${context.techStack.join(', ')}` : '';
     
+    const prompt = `Proporciona una explicación concisa (2-3 líneas) sobre "${term}"${contextStr}.
+Enfócate en lo más relevante para una entrevista técnica.
+Si hay un ejemplo corto que ayude, inclúyelo.`;
+
     try {
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
-      
+
       return {
         term: term,
         explanation: response.text(),
@@ -158,52 +241,77 @@ class GeminiService {
       };
     } catch (error) {
       console.error('Error obteniendo información rápida:', error);
-      return null;
+      return {
+        term: term,
+        explanation: 'No se pudo obtener información.',
+        error: error.message
+      };
     }
   }
 
-  addToHistory(question, answer) {
-    this.conversationHistory.push({
-      question,
-      answer,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Mantener solo los últimos N elementos
-    if (this.conversationHistory.length > this.maxHistoryLength) {
-      this.conversationHistory = this.conversationHistory.slice(-this.maxHistoryLength);
-    }
-  }
+  async prepareForInterview(company, position, techStack = []) {
+    const prompt = `Prepara información clave para una entrevista:
 
-  clearHistory() {
-    this.conversationHistory = [];
-  }
+**Empresa**: ${company}
+**Posición**: ${position}
+**Stack tecnológico**: ${techStack.join(', ')}
 
-  // Método para preparación pre-entrevista
-  async prepareForInterview(company, position, techStack) {
-    const prompt = `Prepara información clave para una entrevista en:
-    Empresa: ${company}
-    Posición: ${position}
-    Stack tecnológico: ${techStack.join(', ')}
-    
-    Proporciona:
-    1. Preguntas técnicas comunes para este stack
-    2. Aspectos clave de la empresa a mencionar
-    3. Preguntas inteligentes para hacer al entrevistador
-    4. Puntos a destacar de tu experiencia`;
-    
+Proporciona información estructurada sobre:
+
+1. **Preguntas técnicas frecuentes**: 5 preguntas comunes para este stack y posición
+2. **Sobre la empresa**: Puntos clave para demostrar interés y conocimiento
+3. **Preguntas para el entrevistador**: 3-4 preguntas inteligentes y relevantes
+4. **Puntos fuertes a destacar**: Cómo relacionar experiencia con los requisitos
+5. **Preparación técnica**: Conceptos clave para repasar
+
+Formato: Usa listas y sé específico con ejemplos cuando sea posible.`;
+
     try {
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
-      
+
       return {
         preparation: response.text(),
+        company,
+        position,
+        techStack,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
       console.error('Error preparando entrevista:', error);
-      return null;
+      return {
+        preparation: 'No se pudo generar la preparación.',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
     }
+  }
+
+  // Método para reiniciar la conversación manteniendo el historial
+  resetConversation() {
+    this.initializeChat();
+    console.log('Conversación reiniciada. Historial mantenido.');
+  }
+
+  // Método para limpiar todo
+  clearAll() {
+    this.conversationHistory = [];
+    this.initializeChat();
+    console.log('Historial y conversación limpiados.');
+  }
+
+  // Obtener el historial de conversación
+  getHistory() {
+    return this.conversationHistory;
+  }
+
+  // Obtener estadísticas de uso
+  getStats() {
+    return {
+      totalQuestions: this.conversationHistory.length,
+      sessionStart: this.conversationHistory[0]?.timestamp || null,
+      lastQuestion: this.conversationHistory[this.conversationHistory.length - 1]?.timestamp || null
+    };
   }
 }
 

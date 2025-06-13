@@ -678,7 +678,7 @@
         async function sendAIMessage() {
             const message = aiInput.value.trim();
             if (!message) return;
-
+            console.log('sendAIMessage User', message)
             // Añadir mensaje del usuario
             addAIChatMessage(message, 'user');
             aiInput.value = '';
