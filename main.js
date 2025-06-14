@@ -33,7 +33,7 @@ function createMainWindow() {
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
   }
-
+  mainWindow.setContentProtection(true);
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -58,7 +58,7 @@ function createOverlayWindow() {
     skipTaskbar: true,
     resizable: true
   });
-
+  overlayWindow.setContentProtection(true);
   overlayWindow.loadFile('src/views/overlay.html');
   overlayWindow.setIgnoreMouseEvents(false);
   
