@@ -4,6 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interview Assistant 360</title>
+    
+    <!-- Marked.js para parsear Markdown -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <!-- Prism.js para syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-jsx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -240,6 +254,114 @@
             border: 1px solid rgba(99, 102, 241, 0.3);
         }
 
+        /* Estilos mejorados para contenido Markdown en mensajes de IA */
+        .ai-message.assistant .message-content {
+            line-height: 1.6;
+        }
+
+        .ai-message.assistant h1, 
+        .ai-message.assistant h2, 
+        .ai-message.assistant h3 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+        }
+
+        .ai-message.assistant h1 { font-size: 1.4em; }
+        .ai-message.assistant h2 { font-size: 1.2em; }
+        .ai-message.assistant h3 { font-size: 1.1em; }
+
+        .ai-message.assistant p {
+            margin: 8px 0;
+        }
+
+        .ai-message.assistant ul, 
+        .ai-message.assistant ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .ai-message.assistant li {
+            margin: 4px 0;
+        }
+
+        .ai-message.assistant blockquote {
+            border-left: 3px solid #6366f1;
+            margin: 10px 0;
+            padding-left: 12px;
+            color: #a0a0ff;
+        }
+
+        .ai-message.assistant strong {
+            color: #f0f0f0;
+        }
+
+        .ai-message.assistant em {
+            color: #c0c0c0;
+        }
+
+        /* Estilos para bloques de código */
+        .ai-message.assistant pre {
+            background: #1e1e1e;
+            border-radius: 6px;
+            padding: 0;
+            margin: 12px 0;
+            overflow-x: auto;
+            border: 1px solid #333;
+        }
+
+        .ai-message.assistant pre code {
+            display: block;
+            padding: 12px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .ai-message.assistant code:not(pre code) {
+            background: rgba(99, 102, 241, 0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #a0a0ff;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        /* Botón de copiar código */
+        .code-block-wrapper {
+            position: relative;
+            margin: 12px 0;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #333;
+            color: #e0e0e0;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.3s, background 0.3s;
+        }
+
+        .code-block-wrapper:hover .copy-button {
+            opacity: 1;
+        }
+
+        .copy-button:hover {
+            background: #444;
+        }
+
+        .copy-button.copied {
+            background: #10b981;
+            color: white;
+        }
+
         .ai-input-container {
             padding: 20px;
             border-top: 1px solid #333;
@@ -410,6 +532,33 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Indicador de escritura mejorado */
+        .typing-indicator {
+            display: inline-flex;
+            gap: 4px;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+            width: fit-content;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: #6366f1;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; transform: scale(1); }
+            30% { opacity: 1; transform: scale(1.2); }
+        }
     </style>
 </head>
 <body>
@@ -466,22 +615,24 @@
             <div class="quick-suggestions">
                 <div class="suggestions-title">Sugerencias Rápidas</div>
                 <div class="suggestion-chips" id="suggestionChips">
-                    <div class="suggestion-chip" data-question="¿Qué es microservicios?">Microservicios</div>
-                    <div class="suggestion-chip" data-question="Explica REST vs GraphQL">REST vs GraphQL</div>
+                    <div class="suggestion-chip" data-question="Puedes responder la ultima pregunta?, que sea corta y concisa en español">Resolver la Ultima Pregunta</div>
+                    <div class="suggestion-chip" data-question="Could you resolve the last question? Please explain it in a way that is easy to understand and short in english">Explain Last Question</div>
                     <div class="suggestion-chip" data-question="Mejores prácticas CI/CD">CI/CD</div>
                 </div>
             </div>
 
             <div class="ai-chat" id="aiChat">
                 <div class="ai-message assistant">
-                    <strong>Gemini Assistant:</strong><br>
-                    ¡Hola! Estoy aquí para ayudarte durante tu entrevista. Puedo:
-                    <ul style="margin-top: 10px; margin-left: 20px;">
-                        <li>Responder preguntas técnicas</li>
-                        <li>Sugerir mejores formas de expresar ideas</li>
-                        <li>Proporcionar contexto sobre tecnologías</li>
-                        <li>Ayudarte a formular preguntas</li>
-                    </ul>
+                    <div class="message-content">
+                        <strong>Gemini Assistant:</strong><br>
+                        ¡Hola! Estoy aquí para ayudarte durante tu entrevista. Puedo:
+                        <ul style="margin-top: 10px; margin-left: 20px;">
+                            <li>Responder preguntas técnicas</li>
+                            <li>Sugerir mejores formas de expresar ideas</li>
+                            <li>Proporcionar contexto sobre tecnologías</li>
+                            <li>Ayudarte a formular preguntas</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -504,6 +655,18 @@
 
     <script>
         const { ipcRenderer } = require('electron');
+        
+        // Configurar marked.js para usar Prism.js
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (Prism.languages[lang]) {
+                    return Prism.highlight(code, Prism.languages[lang], lang);
+                }
+                return code;
+            },
+            breaks: true,
+            gfm: true
+        });
         
         // Elementos DOM
         const toggleRecording = document.getElementById('toggleRecording');
@@ -675,16 +838,76 @@
             }
         }
 
+        // Función para escapar HTML (seguridad)
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Función para agregar botones de copiar a bloques de código
+        function addCopyButtons(container) {
+            const codeBlocks = container.querySelectorAll('pre');
+            codeBlocks.forEach(pre => {
+                // Evitar duplicar si ya tiene wrapper
+                if (pre.parentNode.classList.contains('code-block-wrapper')) return;
+                
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper';
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.textContent = 'Copiar';
+                wrapper.appendChild(copyButton);
+
+                copyButton.addEventListener('click', () => {
+                    const code = pre.querySelector('code').textContent;
+                    navigator.clipboard.writeText(code).then(() => {
+                        copyButton.textContent = '✓ Copiado';
+                        copyButton.classList.add('copied');
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copiar';
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    });
+                });
+            });
+        }
+
+        // Función mejorada para mostrar indicador de escritura
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'ai-message assistant typing-message';
+            typingDiv.innerHTML = `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+            aiChat.appendChild(typingDiv);
+            aiChat.scrollTop = aiChat.scrollHeight;
+            return typingDiv;
+        }
+
         async function sendAIMessage() {
             const message = aiInput.value.trim();
             if (!message) return;
             console.log('sendAIMessage User', message)
+            
             // Añadir mensaje del usuario
             addAIChatMessage(message, 'user');
             aiInput.value = '';
 
-            // Mostrar loading
-            const loadingMsg = addAIChatMessage('<span class="loading"></span> Pensando...', 'assistant');
+            // Mostrar indicador de escritura
+            const typingIndicator = showTypingIndicator();
 
             try {
                 const response = await ipcRenderer.invoke('ask-gemini', message, {
@@ -692,8 +915,8 @@
                     meetingTopic: 'Entrevista Técnica'
                 });
 
-                // Remover loading y añadir respuesta
-                loadingMsg.remove();
+                // Remover indicador de escritura
+                typingIndicator.remove();
                 
                 if (response.success) {
                     addAIChatMessage(response.response.answer, 'assistant');
@@ -701,15 +924,34 @@
                     addAIChatMessage('Error: ' + response.error, 'assistant');
                 }
             } catch (error) {
-                loadingMsg.remove();
+                typingIndicator.remove();
                 addAIChatMessage('Error al comunicarse con Gemini', 'assistant');
             }
         }
 
+        // Función actualizada para renderizar mensajes con Markdown
         function addAIChatMessage(text, type) {
             const message = document.createElement('div');
             message.className = `ai-message ${type}`;
-            message.innerHTML = type === 'user' ? `<strong>Tú:</strong><br>${text}` : text;
+            
+            if (type === 'user') {
+                // Para mensajes del usuario, escapar HTML por seguridad
+                message.innerHTML = `
+                    <div class="message-content">
+                        <strong>Tú:</strong><br>${escapeHtml(text)}
+                    </div>
+                `;
+            } else {
+                // Para mensajes del asistente, renderizar Markdown
+                const renderedContent = marked.parse(text);
+                message.innerHTML = `<div class="message-content">${renderedContent}</div>`;
+                
+                // Agregar botones de copiar después de un pequeño delay
+                setTimeout(() => {
+                    addCopyButtons(message);
+                }, 100);
+            }
+            
             aiChat.appendChild(message);
             aiChat.scrollTop = aiChat.scrollHeight;
             return message;
